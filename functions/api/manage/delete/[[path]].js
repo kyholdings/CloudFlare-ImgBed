@@ -303,28 +303,52 @@ async function deleteWebDAVFile(env, img) {
     }
 }
 
-// 删除 TelegramNew 渠道的图片（删除 TG 存储频道里对应的消息）
+// 删除 TelegramNew 渠道的图片（删 TG 存储频道消息 + 用户私聊里的原始图）
 async function deleteTelegramNewFile(env, img) {
     const db = getDatabase(env);
     const tgCredentials = await resolveTelegramCredentials(db, env, img.metadata);
     const botToken = tgCredentials.botToken;
-    const chatId = tgCredentials.chatId;
-    const messageId = img.metadata?.TgMessageId;
+    const proxyUrl = tgCredentials.proxyUrl || '';
+    const channelChatId = tgCredentials.chatId;
+    const channelMsgId = img.metadata?.TgMessageId;
+    const userChatId = img.metadata?.UserChatId;
+    const userMsgId = img.metadata?.UserMessageId;
 
-    if (!botToken || !chatId || !messageId) {
-        console.warn('TelegramNew file missing required metadata for deletion');
+    if (!botToken) {
+        console.warn('TelegramNew file missing bot credentials for deletion');
         return false;
     }
 
-    try {
-        const telegramAPI = new TelegramAPI(botToken, tgCredentials.proxyUrl || '');
-        const result = await telegramAPI.deleteMessage(chatId, messageId);
-        if (!result?.ok) {
-            console.error('TelegramNew Delete Failed:', result?.description || 'API returned not ok');
+    let ok = true;
+    const telegramAPI = new TelegramAPI(botToken, proxyUrl);
+
+    // 主目标：删存储频道里那条存图消息
+    if (channelChatId != null && channelMsgId != null) {
+        try {
+            const result = await telegramAPI.deleteMessage(channelChatId, channelMsgId);
+            if (!result?.ok) {
+                ok = false;
+                console.error('TelegramNew Delete Failed:', result?.description || 'API returned not ok');
+            }
+        } catch (error) {
+            ok = false;
+            console.error("TelegramNew Delete Failed:", error);
         }
-        return true;
-    } catch (error) {
-        console.error("TelegramNew Delete Failed:", error);
-        return false;
+    } else {
+        console.warn('TelegramNew missing channel chatId or TgMessageId, skip channel delete');
     }
+
+    // 尽力：删用户私聊里那条原始上传图
+    if (userChatId != null && userMsgId != null) {
+        try {
+            const result = await telegramAPI.deleteMessage(userChatId, userMsgId);
+            if (!result?.ok) {
+                console.warn('TelegramNew user-original delete failed:', result?.description || 'API returned not ok');
+            }
+        } catch (error) {
+            console.warn('TelegramNew user-original delete error:', error.message);
+        }
+    }
+
+    return ok;
 }
