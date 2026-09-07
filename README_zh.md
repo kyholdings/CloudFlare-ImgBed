@@ -44,7 +44,7 @@ CloudFlare ImgBed 现在可以**接收你的 Telegram 机器人在私聊中发�
 2. Telegram 将 update 推送到 `POST /telegram/webhook`。
 3. 处理器校验 `X-Telegram-Bot-Api-Secret-Token`（设置了 secret 时），以 `update_id` 去重，并使用同一个 bot 将该文件转发到你配置的 Telegram 存储频道。
 4. 写入 KV 记录（`Channel: TelegramNew`、`ChannelName` = 频道名、`TgFileId` = 转发后的 `file_id`）并更新索引。
-5. bot 回发 `已保存：<文件名>` 以及一个 `/file/<id>` 链接。
+5. bot 回发 `已保存：<文件名>` 以及一个 `/file/<id>` 链接（关闭链接预览，附「删除」按钮）。
 
 ### 要求
 
@@ -66,6 +66,13 @@ https://<你的域名>/api/manage/telegram/setWebhook?url=https://<你的域名>
 ### 支持的媒体
 
 `photo`（最大尺寸）、`document`、`video`、`animation`（GIF）、`audio`。不含匹配媒体类型的 update 将被确认并跳过。
+
+### 同步删除（双向）
+
+- 回执消息带一个 **「🗑️ 删除」按钮**——点击后同步删除：存储频道里的文件、私聊里的原图、回执消息本身，以及 KV 记录 / 管理后台文件夹。
+- **管理端删除同样联动**：删除 Telegram 存储频道里对应的存图消息（含管理端上传的那份）；若文件来自私聊，还会一并删除私聊原图和回执。
+- 删除依赖文件元数据里存的消息 ID（`TgMessageId` / `TgMessageIds` / `UserMessageId` / `ReceiptMessageId`）。**这些 ID 只对启用该版本后新上传的文件写入**，发布前已存在的文件无法反删其 Telegram 副本。
+- 回执已关闭 URL 链接预览（`link_preview_options.is_disabled`），避免 Telegram 自动带出缩略图造成"多一张图"的观感。
 
 ## 🤝 合作伙伴
 

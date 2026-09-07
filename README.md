@@ -44,7 +44,7 @@ Files land in the **root directory**, so they appear in the admin "folder" list 
 2. Telegram pushes the update to `POST /telegram/webhook`.
 3. The handler validates the `X-Telegram-Bot-Api-Secret-Token` (when a secret is set), deduplicates by `update_id`, and forwards the file into your configured Telegram storage channel using the same bot.
 4. It writes a KV record (`Channel: TelegramNew`, `ChannelName` = channel name, `TgFileId` = forwarded `file_id`) and updates the index.
-5. The bot replies with `已保存：<文件名>` plus a `/file/<id>` link.
+5. The bot replies with `已保存：<文件名>` plus a `/file/<id>` link (link preview disabled, with a "delete" button).
 
 ### Requirements
 
@@ -66,6 +66,13 @@ https://<your-domain>/api/manage/telegram/setWebhook?url=https://<your-domain>/t
 ### Supported media
 
 `photo` (largest variant), `document`, `video`, `animation` (GIF), and `audio`. Updates without a matching media type are acknowledged and skipped.
+
+### Two-way delete sync
+
+- The reply message carries a **「🗑️ 删除」 button** — clicking it deletes in sync: the stored channel file, the original image in the private chat, the reply message itself, and the KV record / admin folder.
+- **Deleting from the admin panel also syncs**: it removes the corresponding stored message in the Telegram channel (including one uploaded from the admin panel); if the file came from a private chat, it also deletes the original private-chat image and the reply.
+- Deletion relies on message IDs stored in the file metadata (`TgMessageId` / `TgMessageIds` / `UserMessageId` / `ReceiptMessageId`). **These IDs are written only for files uploaded after this feature is enabled**; files that already existed before the release cannot have their Telegram copies removed retroactively.
+- The reply disables the URL link preview (`link_preview_options.is_disabled`) so Telegram does not auto-embed a thumbnail, avoiding the "extra image" look.
 
 ## 🤝 Partners
 
