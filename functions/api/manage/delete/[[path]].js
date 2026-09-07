@@ -5,10 +5,12 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { DiscordAPI } from '../../../utils/storage/discordAPI.js';
 import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
 import { WebDAVAPI } from '../../../utils/storage/webdavAPI.js';
+import { TelegramAPI } from '../../../utils/storage/telegramAPI.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
     resolveS3Credentials,
+    resolveTelegramCredentials,
     resolveWebDAVCredentials,
 } from '../../../utils/metadata/channelCredentials.js';
 
@@ -168,6 +170,11 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
             await deleteWebDAVFile(env, img);
         }
 
+        // TelegramNew 渠道的图片，需要删除 TG 存储频道里对应的消息
+        if (img.metadata?.Channel === 'TelegramNew') {
+            await deleteTelegramNewFile(env, img);
+        }
+
         // 删除数据库中的记录
         // 注意：容量统计现在由索引自动维护，删除文件后索引更新时会自动重新计算
         await db.delete(fileId);
@@ -292,6 +299,32 @@ async function deleteWebDAVFile(env, img) {
         return await webdavAPI.deleteFile(filePath);
     } catch (error) {
         console.error("WebDAV Delete Failed:", error);
+        return false;
+    }
+}
+
+// 删除 TelegramNew 渠道的图片（删除 TG 存储频道里对应的消息）
+async function deleteTelegramNewFile(env, img) {
+    const db = getDatabase(env);
+    const tgCredentials = await resolveTelegramCredentials(db, env, img.metadata);
+    const botToken = tgCredentials.botToken;
+    const chatId = tgCredentials.chatId;
+    const messageId = img.metadata?.TgMessageId;
+
+    if (!botToken || !chatId || !messageId) {
+        console.warn('TelegramNew file missing required metadata for deletion');
+        return false;
+    }
+
+    try {
+        const telegramAPI = new TelegramAPI(botToken, tgCredentials.proxyUrl || '');
+        const result = await telegramAPI.deleteMessage(chatId, messageId);
+        if (!result?.ok) {
+            console.error('TelegramNew Delete Failed:', result?.description || 'API returned not ok');
+        }
+        return true;
+    } catch (error) {
+        console.error("TelegramNew Delete Failed:", error);
         return false;
     }
 }
