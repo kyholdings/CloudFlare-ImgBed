@@ -184,9 +184,11 @@ export async function onRequest(context) {
 
         // 13. 回发用户（附「删除」按钮：点击经 callback_query 同步删管理端文件）
         const deleteToken = await makeDeleteToken(db, fullId);
-        const replyExtra = deleteToken
-            ? { reply_markup: { inline_keyboard: [[{ text: '🗑️ 删除', callback_data: deleteToken }]] } }
-            : {};
+        // 关闭链接预览：否则 URL 会让 TG 自动把图缩略图画进回执，造成"多一张图"的观感
+        const replyExtra = { link_preview_options: { is_disabled: true } };
+        if (deleteToken) {
+            replyExtra.reply_markup = { inline_keyboard: [[{ text: '🗑️ 删除', callback_data: deleteToken }]] };
+        }
         try {
             const replyRes = await tgApi.sendMessage(chatId, `已保存：${fileName}\n${fileUrl}`, 'HTML', replyExtra);
             // 记录回执消息 ID，供「管理端删除」时联动删掉这条回执/删除按钮
