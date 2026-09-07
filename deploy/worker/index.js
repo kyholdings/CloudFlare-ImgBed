@@ -34,6 +34,7 @@ import * as apiManageSysConfigSecurity from '../../functions/api/manage/sysConfi
 import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/upload.js';
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
+import * as apiManageTelegramSetWebhook from '../../functions/api/manage/telegram/setWebhook.js';
 import * as apiAuthAdminLogin from '../../functions/api/auth/adminLogin.js';
 import * as apiAuthLogin from '../../functions/api/auth/login.js';
 import * as apiAuthLogout from '../../functions/api/auth/logout.js';
@@ -51,6 +52,7 @@ import * as apiChannels from '../../functions/api/channels.js';
 import * as apiDirectoryTree from '../../functions/api/directoryTree.js';
 import * as apiFetchRes from '../../functions/api/fetchRes.js';
 import * as apiUserConfig from '../../functions/api/userConfig.js';
+import * as telegramWebhook from '../../functions/telegram/webhook.js';
 import * as random_index from '../../functions/random/index.js';
 import * as upload_index from '../../functions/upload/index.js';
 import * as apiManageBlockCatchAll from '../../functions/api/manage/block/[[path]].js';
@@ -85,6 +87,7 @@ const routes = [
     { path: '/api/manage/sysConfig/upload', module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/autocomplete', module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/batch', module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/telegram/setWebhook', module: apiManageTelegramSetWebhook, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/auth/adminLogin', module: apiAuthAdminLogin, middlewares: [mw_api] },
     { path: '/api/auth/login', module: apiAuthLogin, middlewares: [mw_api] },
     { path: '/api/auth/logout', module: apiAuthLogout, middlewares: [mw_api] },
@@ -102,6 +105,7 @@ const routes = [
     { path: '/api/directoryTree', module: apiDirectoryTree, middlewares: [mw_api] },
     { path: '/api/fetchRes', module: apiFetchRes, middlewares: [mw_api] },
     { path: '/api/userConfig', module: apiUserConfig, middlewares: [mw_api] },
+    { path: '/telegram/webhook', module: telegramWebhook, middlewares: [] },
     { path: '/random', module: random_index, middlewares: [mw_random] },
     { path: '/upload', module: upload_index, middlewares: [mw_upload] },
     { path: '/api/manage/block/', module: apiManageBlockCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
