@@ -1239,7 +1239,8 @@ export async function uploadLargeFileToTelegram(context, file, fullId, metadata,
                 index: i,
                 fileId: chunkInfo.file_id,
                 size: chunkInfo.file_size,
-                fileName: chunkFileName
+                fileName: chunkFileName,
+                messageId: chunkInfo.message_id
             });
 
             uploadedChunks.push(chunkInfo.file_id);
@@ -1256,6 +1257,10 @@ export async function uploadLargeFileToTelegram(context, file, fullId, metadata,
         metadata.IsChunked = true;
         metadata.TotalChunks = totalChunks;
         metadata.FileSize = (fileSize / 1024 / 1024).toFixed(2);
+
+        // 记录每个分片在频道里的消息 ID，供删除时联动清理
+        const messageIds = chunks.map(c => c.messageId).filter(Boolean);
+        if (messageIds.length) metadata.TgMessageIds = messageIds;
 
 
         // 将分片信息存储到value中
@@ -1314,7 +1319,8 @@ async function uploadChunkToTelegramWithRetry(tgBotToken, tgChatId, tgProxyUrl, 
                 throw new Error('Failed to extract file info from response');
             }
 
-            return fileInfo;
+            // 附带该分片在频道里的消息 ID，供删除时联动清理
+            return { ...fileInfo, message_id: response?.result?.message_id };
 
         } catch (error) {
             console.warn(`Chunk ${chunkIndex} upload attempt ${attempt + 1} failed:`, error.message);

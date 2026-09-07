@@ -355,18 +355,23 @@ async function handleDeleteQuery(context, db, update) {
 
     const fails = [];
 
-    // 1. 删「存储频道」里那条存图消息（真正把文件本体从 Telegram 移除）
+    // 1. 删「存储频道」里的存图消息（真正把文件本体从 Telegram 移除；支持分片多消息）
     let channelDeleted = false;
-    if (tgApi && channel?.chatId && meta.TgMessageId != null) {
-        try {
-            const r = await tgApi.deleteMessage(channel.chatId, meta.TgMessageId);
-            channelDeleted = !!r?.ok;
-            if (!r?.ok) fails.push(`频道消息: ${r?.description || 'unknown'}(id=${meta.TgMessageId})`);
-        } catch (e) {
-            console.warn(`[tg-webhook] delete channel msg failed: ${e.message}`);
-            fails.push(`频道消息异常: ${e.message}`);
+    const channelMsgIds = (Array.isArray(meta.TgMessageIds) && meta.TgMessageIds.length)
+        ? meta.TgMessageIds
+        : (meta.TgMessageId != null ? [meta.TgMessageId] : []);
+    if (tgApi && channel?.chatId && channelMsgIds.length) {
+        for (const mid of channelMsgIds) {
+            try {
+                const r = await tgApi.deleteMessage(channel.chatId, mid);
+                if (r?.ok) { channelDeleted = true; }
+                else { fails.push(`频道消息: ${r?.description || 'unknown'}(id=${mid})`); }
+            } catch (e) {
+                console.warn(`[tg-webhook] delete channel msg failed: ${e.message}`);
+                fails.push(`频道消息异常: ${e.message}(id=${mid})`);
+            }
         }
-    } else if (meta.TgMessageId == null) {
+    } else if (!channelMsgIds.length) {
         fails.push('缺频道消息ID(旧文件)');
     }
 

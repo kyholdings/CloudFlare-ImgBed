@@ -322,17 +322,22 @@ async function deleteTelegramNewFile(env, img) {
     let ok = true;
     const telegramAPI = new TelegramAPI(botToken, proxyUrl);
 
-    // 主目标：删存储频道里那条存图消息
-    if (channelChatId != null && channelMsgId != null) {
-        try {
-            const result = await telegramAPI.deleteMessage(channelChatId, channelMsgId);
-            if (!result?.ok) {
+    // 主目标：删存储频道里的存图消息（支持分片多消息）
+    const channelMsgIds = (Array.isArray(img.metadata?.TgMessageIds) && img.metadata.TgMessageIds.length)
+        ? img.metadata.TgMessageIds
+        : (channelMsgId != null ? [channelMsgId] : []);
+    if (channelChatId != null && channelMsgIds.length) {
+        for (const mid of channelMsgIds) {
+            try {
+                const result = await telegramAPI.deleteMessage(channelChatId, mid);
+                if (!result?.ok) {
+                    ok = false;
+                    console.error('TelegramNew Delete Failed:', result?.description || 'API returned not ok', `(id=${mid})`);
+                }
+            } catch (error) {
                 ok = false;
-                console.error('TelegramNew Delete Failed:', result?.description || 'API returned not ok');
+                console.error("TelegramNew Delete Failed:", error);
             }
-        } catch (error) {
-            ok = false;
-            console.error("TelegramNew Delete Failed:", error);
         }
     } else {
         console.warn('TelegramNew missing channel chatId or TgMessageId, skip channel delete');

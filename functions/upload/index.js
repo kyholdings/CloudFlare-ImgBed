@@ -535,6 +535,10 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
             metadata.ChannelName = tgChannel.name;
 
             metadata.TgFileId = id;
+            // 记录频道里那条存图消息 ID，供删除时联动清理
+            if (response?.result?.message_id) {
+                metadata.TgMessageId = response.result.message_id;
+            }
             await db.put(fullId, "", {
                 metadata: metadata,
             });
