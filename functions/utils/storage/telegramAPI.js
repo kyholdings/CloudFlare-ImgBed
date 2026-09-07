@@ -225,4 +225,37 @@ export class TelegramAPI {
         return await response.json();
     }
 
+    /**
+     * 删除一条消息
+     * @param {number} chatId - 频道/私聊 ID
+     * @param {number} messageId - 待删除的消息 ID
+     * @returns {Promise<Object>} API响应
+     */
+    async deleteMessage(chatId, messageId) {
+        const body = { chat_id: String(chatId), message_id: messageId };
+        const response = await fetch(`${this.baseURL}/deleteMessage`, {
+            method: 'POST',
+            headers: { ...this.defaultHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return await response.json();
+    }
+
+    /**
+     * 回执 callback_query（停掉按钮转圈/弹出提示）
+     * @param {string} callbackQueryId - callback_query.id
+     * @param {string} [text=''] - 展示给用户提示文本
+     * @returns {Promise<Object>} API响应
+     */
+    async answerCallbackQuery(callbackQueryId, text = '') {
+        const body = { callback_query_id: callbackQueryId };
+        if (text) body.text = text;
+        const response = await fetch(`${this.baseURL}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { ...this.defaultHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return await response.json();
+    }
+
 }

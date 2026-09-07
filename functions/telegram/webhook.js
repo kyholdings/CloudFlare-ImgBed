@@ -19,6 +19,8 @@ import { TelegramAPI } from '../utils/storage/telegramAPI.js';
 import {
     moderateContent, endUpload, buildUniqueFileId, getUploadIp, getIPAddress,
 } from '../upload/uploadTools.js';
+import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from '../utils/purgeCache';
+import { removeFileFromIndex } from '../utils/indexManager.js';
 
 const DEFAULT_TG_DOMAIN = 'https://api.telegram.org';
 
@@ -68,9 +70,15 @@ export async function onRequest(context) {
     }
 
     try {
+        // 处理「删除按钮」点击（callback_query）—— 从私聊侧同步删除管理端文件
+        const cq = update?.callback_query;
+        if (cq?.data) {
+            return await handleDeleteQuery(context, db, update);
+        }
+
         const msg = update?.message || update?.channel_post;
         if (!msg) {
-            // 非消息类 update（如 callback_query），直接确认
+            // 非消息类 update（如 channel_post 缺内容等），直接确认
             return new Response('OK', { status: 200 });
         }
 
@@ -97,6 +105,7 @@ export async function onRequest(context) {
         // 6. 用 file_id 转发存进存储频道，取回【同 bot 的新 file_id】
         let tgFileId = media.fileId;
         let fwdSize = media.fileSize || 0;
+        let tgMessageId = null;
         try {
             const fwd = await tgApi.sendById(channel.chatId, media.fileId, media.type, media.caption || '');
             const info = tgApi.getFileInfo(fwd);
@@ -105,6 +114,10 @@ export async function onRequest(context) {
                 fwdSize = info.file_size || fwdSize;
             } else {
                 console.warn('[tg-webhook] sendById succeeded but could not parse new file_id, use original');
+            }
+            if (fwd?.result?.message_id) {
+                // 频道里那条存图消息的 message_id，供删除按钮回执时 deleteMessage 用
+                tgMessageId = fwd.result.message_id;
             }
         } catch (e) {
             // 大小超限等：回退用原 file_id（仍属同一 bot，出图可解析）
@@ -147,6 +160,7 @@ export async function onRequest(context) {
         metadata.Channel = 'TelegramNew';
         metadata.ChannelName = channel.name;
         metadata.TgFileId = tgFileId;
+        if (tgMessageId) metadata.TgMessageId = tgMessageId;
 
         // 9. 构造 fullId（内部查重）
         const fullId = await buildUniqueFileId(context, fileName, fileType);
@@ -165,9 +179,13 @@ export async function onRequest(context) {
             ? `${urlPrefix.replace(/\/+$/, '')}/${fullId}`
             : `${url.origin}/file/${fullId}`;
 
-        // 13. 回发用户
+        // 13. 回发用户（附「删除」按钮：点击经 callback_query 同步删管理端文件）
+        const deleteToken = await makeDeleteToken(db, fullId);
+        const replyExtra = deleteToken
+            ? { reply_markup: { inline_keyboard: [[{ text: '🗑️ 删除', callback_data: deleteToken }]] } }
+            : {};
         try {
-            await tgApi.sendMessage(chatId, `已保存：${fileName}\n${fileUrl}`);
+            await tgApi.sendMessage(chatId, `已保存：${fileName}\n${fileUrl}`, 'HTML', replyExtra);
         } catch (e) {
             console.warn(`[tg-webhook] reply failed: ${e.message}`);
         }
@@ -260,4 +278,108 @@ function selectChannel(channels, url) {
         if (hit) return hit;
     }
     return channels[0];
+}
+
+/**
+ * 生成「删除」按钮的短 token（callback_data 上限 64 字节，fullId 过长，用短 token 映射到 fullId）
+ * KV 存 webhook@del@<token> -> fullId，TTL 7 天
+ */
+async function makeDeleteToken(db, fullId) {
+    try {
+        const token = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+        await db.put(`webhook@del@${token}`, fullId, { expirationTtl: 7 * 24 * 3600 });
+        return token;
+    } catch (e) {
+        console.warn(`[tg-webhook] makeDeleteToken failed: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * 解析 callback_query 归属的 TG 存储渠道
+ * 优先按文件的 ChannelName 匹配（委托调用方传入 img.metadata.ChannelName），
+ * 否则按按钮所在私聊 chat.id 匹配，最后兜底第一个 enabled 渠道。
+ */
+async function resolveCqChannel(env, cq, preferredName) {
+    const uploadConfig = await fetchUploadConfig(env, { env });
+    const tgChannels = (uploadConfig.telegram?.channels || []).filter(c => c && c.botToken);
+    if (!tgChannels.length) return null;
+    if (preferredName) {
+        const hit = tgChannels.find(c => c.name === preferredName);
+        if (hit) return hit;
+    }
+    const priChatId = cq?.message?.chat?.id;
+    if (priChatId != null) {
+        const hit = tgChannels.find(c => String(c.chatId) === String(priChatId));
+        if (hit) return hit;
+    }
+    return tgChannels[0];
+}
+
+/**
+ * 处理「删除按钮」点击：私聊侧删除 -> 同步删管理端 KV 记录 + 清缓存 + 更新索引 + 删存储频道里那条存图消息
+ */
+async function handleDeleteQuery(context, db, update) {
+    const { env, waitUntil, request } = context;
+    const cq = update?.callback_query || {};
+    const chat = cq.message?.chat;
+    const msgId = cq.message?.message_id;
+    const userId = cq.from?.id;
+
+    const token = (cq.data || '').trim();
+    if (!token) return new Response('OK', { status: 200 });
+
+    const origin = new URL(request.url).origin;
+    const delKey = `webhook@del@${token}`;
+    const fullId = await db.get(delKey).catch(() => null);
+    const img = fullId ? await db.getWithMetadata(fullId).catch(() => null) : null;
+
+    const channel = await resolveCqChannel(env, cq, img?.metadata?.ChannelName);
+    const tgApi = channel ? new TelegramAPI(channel.botToken, channel.proxyUrl || '') : null;
+
+    // 票据失效 / 文件已被删：回执提示，顺手删掉按钮那条确认消息
+    if (!fullId || !img) {
+        try {
+            if (tgApi) await tgApi.answerCallbackQuery(cq.id, fullId ? '文件不存在' : '链接已失效');
+        } catch (e) { /* 忽略 */ }
+        if (tgApi && chat?.id && msgId) {
+            try { await tgApi.deleteMessage(chat.id, msgId); } catch (e) { /* 忽略 */ }
+        }
+        if (fullId) await db.delete(delKey).catch(() => {});
+        return new Response('OK', { status: 200 });
+    }
+
+    // 1. 回执按钮（停掉转圈）
+    try { await tgApi.answerCallbackQuery(cq.id, '已删除'); } catch (e) { /* 忽略 */ }
+
+    // 2. 删存储频道里那条存图消息
+    if (tgApi && img?.metadata?.TgMessageId && channel?.chatId) {
+        try {
+            await tgApi.deleteMessage(channel.chatId, img.metadata.TgMessageId);
+        } catch (e) {
+            console.warn(`[tg-webhook] delete channel msg failed: ${e.message}`);
+        }
+    }
+
+    // 3. 删管理端 KV 记录 + 清 CDN/列表缓存 + 更新索引
+    const cdnUrl = `${origin}/file/${fullId}`;
+    try {
+        await db.delete(fullId);
+        await purgeCFCache(env, cdnUrl).catch(() => {});
+        const normalizedFolder = fullId.split('/').slice(0, -1).join('/');
+        await purgeRandomFileListCache(origin, normalizedFolder).catch(() => {});
+        await purgePublicFileListCache(origin, normalizedFolder).catch(() => {});
+        waitUntil(removeFileFromIndex(context, fullId));
+    } catch (e) {
+        console.error(`[tg-webhook] db delete failed: ${e.message}`);
+    }
+
+    // 4. 删带按钮的那条确认消息
+    if (tgApi && chat?.id && msgId) {
+        try { await tgApi.deleteMessage(chat.id, msgId); } catch (e) { /* 忽略 */ }
+    }
+
+    await db.delete(delKey).catch(() => {});
+    console.log(`[tg-webhook] callback deleted ${fullId} (by user ${userId})`);
+    return new Response('OK', { status: 200 });
 }
