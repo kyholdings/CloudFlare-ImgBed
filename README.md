@@ -32,6 +32,41 @@ CloudFlare ImgBed is a self-hosted image and file hosting solution for Docker an
 
 ![CloudFlare](readme/海报.png)
 
+## ✨ Telegram Inbound Webhook (new)
+
+CloudFlare ImgBed can now **ingest files sent to your Telegram bot in a private chat**. Send a photo, document, video, or audio to your bot and it is automatically saved into the same Telegram storage channel, written to the KV record, shown in the admin file folder, and the bot replies with a direct access link — no upload through the web UI needed.
+
+Files land in the **root directory**, so they appear in the admin "folder" list immediately, tagged with `Channel: TelegramNew`.
+
+### How it works
+
+1. You send a file to your bot in a private chat.
+2. Telegram pushes the update to `POST /telegram/webhook`.
+3. The handler validates the `X-Telegram-Bot-Api-Secret-Token` (when a secret is set), deduplicates by `update_id`, and forwards the file into your configured Telegram storage channel using the same bot.
+4. It writes a KV record (`Channel: TelegramNew`, `ChannelName` = channel name, `TgFileId` = forwarded `file_id`) and updates the index.
+5. The bot replies with `已保存：<文件名>` plus a `/file/<id>` link.
+
+### Requirements
+
+- **The bot you message MUST be the same bot configured as a Telegram storage channel** (e.g. `TG_BOT_TOKEN` / `TG_CHAT_ID`). Telegram `file_id` values are bound to the bot that created them; a different bot cannot resolve the file.
+
+### Setup
+
+Register the webhook with Telegram once (log in as an admin first — the endpoint is behind admin authentication):
+
+```
+# After logging into the dashboard (admin session cookie) — GET or POST
+https://<your-domain>/api/manage/telegram/setWebhook?url=https://<your-domain>/telegram/webhook
+```
+
+- Optional: add `&secret=<your-secret>` to bind a secret token (also stored as `manage@sysConfig@telegram@webhookSecret` and validated on every update). A `TG_WEBHOOK_SECRET` env var is used when no secret is passed.
+- Optional: `&drop_pending_updates=true` to drop queued updates; `&allowed_updates=[...]` to restrict update types.
+- The endpoint resolves the target channel from your Telegram configuration (default `Telegram_env` or the first enabled channel); use `&channelName=<name>` to pick a specific one.
+
+### Supported media
+
+`photo` (largest variant), `document`, `video`, `animation` (GIF), and `audio`. Updates without a matching media type are acknowledged and skipped.
+
 ## 🤝 Partners
 
 <table width="100%">
