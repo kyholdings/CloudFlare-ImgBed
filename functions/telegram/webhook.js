@@ -188,7 +188,12 @@ export async function onRequest(context) {
             ? { reply_markup: { inline_keyboard: [[{ text: '🗑️ 删除', callback_data: deleteToken }]] } }
             : {};
         try {
-            await tgApi.sendMessage(chatId, `已保存：${fileName}\n${fileUrl}`, 'HTML', replyExtra);
+            const replyRes = await tgApi.sendMessage(chatId, `已保存：${fileName}\n${fileUrl}`, 'HTML', replyExtra);
+            // 记录回执消息 ID，供「管理端删除」时联动删掉这条回执/删除按钮
+            const receiptMsgId = replyRes?.result?.message_id;
+            if (receiptMsgId != null) {
+                await db.put(fullId, '', { metadata: { ...metadata, ReceiptMessageId: receiptMsgId } });
+            }
         } catch (e) {
             console.warn(`[tg-webhook] reply failed: ${e.message}`);
         }

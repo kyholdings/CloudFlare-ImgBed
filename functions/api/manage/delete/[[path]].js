@@ -355,5 +355,18 @@ async function deleteTelegramNewFile(env, img) {
         }
     }
 
+    // 尽力：删 bot 发在私聊里的「回执+删除按钮」消息
+    const receiptMsgId = img.metadata?.ReceiptMessageId;
+    if (userChatId != null && receiptMsgId != null) {
+        try {
+            const result = await telegramAPI.deleteMessage(userChatId, receiptMsgId);
+            if (!result?.ok) {
+                console.warn('TelegramNew receipt delete failed:', result?.description || 'API returned not ok');
+            }
+        } catch (error) {
+            console.warn('TelegramNew receipt delete error:', error.message);
+        }
+    }
+
     return ok;
 }
