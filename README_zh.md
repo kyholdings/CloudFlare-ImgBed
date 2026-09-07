@@ -32,6 +32,41 @@ CloudFlare ImgBed 是支持 Docker 与 Serverless 部署的自建图床和文件
 
 ![CloudFlare](readme/海报.png)
 
+## ✨ Telegram 入站 Webhook（新增）
+
+CloudFlare ImgBed 现在可以**接收你的 Telegram 机器人在私聊中发送的文件**。给 bot 发送图片、文档、视频或音频，它会自动保存到同一个 Telegram 存储频道，写入 KV 记录，出现在管理后台文件夹中，并且 bot 会回发一个直接访问链接——无需通过网页端上传。
+
+文件落在**根目录**，因此会立即出现在管理后台「文件夹」列表中，标记为 `Channel: TelegramNew`。
+
+### 工作原理
+
+1. 你在私聊中给 bot 发送一个文件。
+2. Telegram 将 update 推送到 `POST /telegram/webhook`。
+3. 处理器校验 `X-Telegram-Bot-Api-Secret-Token`（设置了 secret 时），以 `update_id` 去重，并使用同一个 bot 将该文件转发到你配置的 Telegram 存储频道。
+4. 写入 KV 记录（`Channel: TelegramNew`、`ChannelName` = 频道名、`TgFileId` = 转发后的 `file_id`）并更新索引。
+5. bot 回发 `已保存：<文件名>` 以及一个 `/file/<id>` 链接。
+
+### 要求
+
+- **你发送消息的 bot 必须与配置为 Telegram 存储频道的 bot 相同**（例如 `TG_BOT_TOKEN` / `TG_CHAT_ID`）。Telegram 的 `file_id` 绑定到创建它的 bot；不同的 bot 无法解析该文件。
+
+### 配置
+
+向 Telegram 注册一次 webhook（先以管理员登录——该端点受管理员认证保护）：
+
+```
+# 登录后台（管理员会话 cookie）后 —— GET 或 POST
+https://<你的域名>/api/manage/telegram/setWebhook?url=https://<你的域名>/telegram/webhook
+```
+
+- 可选：添加 `&secret=<你的密钥>` 绑定 secret 令牌（同时存储为 `manage@sysConfig@telegram@webhookSecret`，并在每次 update 时校验）。未传 secret 时使用 `TG_WEBHOOK_SECRET` 环境变量。
+- 可选：`&drop_pending_updates=true` 丢弃排队中的 update；`&allowed_updates=[...]` 限制 update 类型。
+- 端点会根据你的 Telegram 配置解析目标频道（默认为 `Telegram_env` 或第一个启用的频道）；用 `&channelName=<名称>` 选择指定频道。
+
+### 支持的媒体
+
+`photo`（最大尺寸）、`document`、`video`、`animation`（GIF）、`audio`。不含匹配媒体类型的 update 将被确认并跳过。
+
 ## 🤝 合作伙伴
 
 <table width="100%">
