@@ -219,9 +219,9 @@ https://<你的域名>/api/manage/telegram/setWebhook?url=https://<你的域名>
 
 <a href="https://github.com/MarSeventh/CloudFlare-ImgBed">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://marseventh.github.io/CloudFlare-ImgBed/star-history-dark.svg" />
-   <source media="(prefers-color-scheme: light)" srcset="https://marseventh.github.io/CloudFlare-ImgBed/star-history-light.svg" />
-   <img alt="Star-History" src="https://marseventh.github.io/CloudFlare-ImgBed/star-history-light.svg" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=marseventh%2Fcloudflare-imgbed%2Cmarseventh/sanyue-imghub&amp;type=Date&amp;theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=marseventh%2Fcloudflare-imgbed%2Cmarseventh/sanyue-imghub&amp;type=Date" />
+   <img alt="Star-History" src="https://api.star-history.com/svg?repos=marseventh%2Fcloudflare-imgbed%2Cmarseventh/sanyue-imghub&amp;type=Date" />
  </picture>
 </a>
 
