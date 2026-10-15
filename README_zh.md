@@ -211,6 +211,8 @@ https://<你的域名>/api/manage/telegram/setWebhook?url=https://<你的域名>
 
 感谢所有为项目贡献代码、文档、创意和反馈的开发者！
 
+参与前请阅读[贡献指南](CONTRIBUTING.md)（英文），了解仓库分工、PR 目标分支、代码约定和验证要求。
+
 [![贡献者](https://contrib.rocks/image?repo=Marseventh/Cloudflare-ImgBed)](https://github.com/MarSeventh/CloudFlare-ImgBed/graphs/contributors)
 
 ## ⭐ Star 趋势
